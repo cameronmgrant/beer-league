@@ -1,0 +1,209 @@
+# Beer Feed: Requirements, Test Plan and Data Model
+
+*Draft v0.1 · October 20, 2026 · Personal portfolio project*
+
+## 1. Purpose and scope
+
+Beer Feed is an invite-only social feed where a small group of friends post a photo for each beer they drink. The app keeps one shared feed and counts beers per person per day, per month and per year. It is also a portfolio piece: it is built and tested the way a professional team would work, and a dedicated “How this is tested” section publishes the evidence (test plan, reports, performance baselines, defects found and fixed).
+
+**In scope for v1:** invite-based sign-up, login, photo upload, shared feed, personal counts, leaderboard, deleting your own post, and the testing showcase page.
+
+**Out of scope for v1:** likes, comments, notifications, public sign-up, mobile apps, and moderation tooling.
+
+## 2. Assumptions and constraints
+
+- Users are friends of legal drinking age. Sign-up needs an invite code and an age attestation.
+- Stack: TypeScript end to end (Fastify, React with Vite, PostgreSQL with Drizzle, Vitest, Playwright, k6).
+- Hosting budget is about $10 per month. Images live in S3-compatible storage.
+- Soft target: v1 deployed around the end of 2026, with learning work continuing afterward.
+- Available time: 5 to 10 hours per week.
+
+## 3. Functional requirements
+
+Each requirement has an ID so tests can be traced back to it.
+
+- **FR-1 Sign-up.** A visitor with a valid, unused, unexpired invite code can create an account with a username, password and time zone. *Acceptance:* invalid, used or expired codes are rejected; duplicate usernames are rejected; passwords are stored hashed.
+- **FR-2 Login.** A user can log in with username and password. *Acceptance:* valid credentials return a session token; invalid credentials return 401 without revealing which field was wrong; repeated failures are rate limited.
+- **FR-3 Post a beer.** A logged-in user can upload one image (JPEG, PNG or WebP, max 5 MB) with an optional caption (max 140 characters) and the time it was drunk (defaults to now). *Acceptance:* wrong file types and oversized files are rejected; a thumbnail is generated; the daily count is updated in the same database transaction as the post.
+- **FR-4 Feed.** All logged-in users see all posts, newest first, paged by cursor, 20 per page. *Acceptance:* no duplicates or gaps across pages even when new posts arrive mid-scroll; deleted posts never appear.
+- **FR-5 Personal counts.** A user can see their own count for today, this month and this year. *Acceptance:* totals follow the counting rules in section 4, and “today” resets at 5:00 am in the user’s time zone.
+- **FR-6 Leaderboard.** A logged-in user can view everyone’s counts for day, month or year. *Acceptance:* ties share a rank; results match the underlying posts.
+- **FR-7 Delete.** A user can delete only their own posts. *Acceptance:* the post disappears from the feed and counts decrease; deleting someone else’s post returns 403.
+- **FR-8 Testing showcase.** A page viewable without login links to the test plan, latest reports, coverage, performance baselines and a write-up of defects found. *Acceptance:* the page is generated from the latest CI run, not edited by hand.
+
+## 4. Counting rules (proposed defaults)
+
+1. Every post stores `consumed_at` (a UTC instant) and `local_date`, calculated at post time from the poster’s own time zone, with each day starting at 5:00 am local time.
+2. Day, month and year are all based on `local_date`, so a beer logged at 11:50 pm counts for that same day. The day starts at 5:00 am, so a beer at 4:59 am still counts for the previous day and one at 5:00 am starts a new day. The same cutoff applies to months and years, so a beer at 2:00 am on January 1 counts toward December 31.
+3. Changing a user’s time zone affects future posts only. Existing `local_date` values never change.
+4. Deleting a post decrements the count for its `local_date`. Deleted posts are soft-deleted and never counted.
+5. `consumed_at` cannot be in the future and cannot be more than 48 hours in the past.
+6. Month and year totals are sums of daily counts over the `local_date` range.
+7. Daylight saving changes (23-hour and 25-hour days) must not drop or double-count posts, and the 5:00 am day boundary must hold on those days.
+
+## 5. Non-functional requirements
+
+**Performance targets (starting hypotheses, to be revised after the first baseline):**
+
+- Feed page: p95 under 500 ms with 50 concurrent users and 50,000 posts in the database.
+- Stats and leaderboard: p95 under 300 ms under the same load.
+- Upload: server-side processing p95 under 2 s for a 5 MB image.
+- Error rate under 1% during load tests.
+
+**Security:** hashed passwords (argon2 or bcrypt), HTTPS only, upload type and size validation, rate limiting on login and upload, no secrets in the repository.
+
+**Privacy:** photos are visible only to logged-in members. Image URLs must not be guessable or publicly listable (signed URLs or an authenticated proxy).
+
+**Reliability:** daily database backups, and the app restarts cleanly after a crash.
+
+**Accessibility:** keyboard navigation for core flows and alt text on images.
+
+## 6. Architecture and environments
+
+A React single-page app calls a Fastify API, which uses PostgreSQL for data and an S3-compatible bucket for images. Thumbnails are generated on upload.
+
+| Environment | Where it runs | Data | Used for |
+| --- | --- | --- | --- |
+| Dev | Local Docker Compose | Small seed fixtures | Day-to-day building |
+| Test | Ephemeral Compose stack in GitHub Actions, one per pull request | Small seeded set | Unit, integration, API and E2E tests |
+| Perf | Separate Compose stack with fixed CPU and memory limits | About 50,000 generated posts | Load, stress and spike tests |
+| Prod | Small cloud host, managed Postgres, object storage | Real data | Friends using the app |
+
+Shared CI runners and laptops produce noisy numbers, so performance results are reported as relative change (before and after a fix) rather than absolute capacity.
+
+## 7. Data model
+
+```sql
+CREATE TABLE users (
+  id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  username      TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  time_zone     TEXT NOT NULL,            -- IANA name, e.g. 'Europe/London'
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE invites (
+  code        TEXT PRIMARY KEY,
+  created_by  BIGINT NOT NULL REFERENCES users(id),
+  used_by     BIGINT REFERENCES users(id),
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ
+);
+
+CREATE TABLE beer_posts (
+  id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id      BIGINT NOT NULL REFERENCES users(id),
+  image_key    TEXT NOT NULL,
+  thumb_key    TEXT NOT NULL,
+  caption      TEXT CHECK (char_length(caption) <= 140),
+  consumed_at  TIMESTAMPTZ NOT NULL,
+  local_date   DATE NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at   TIMESTAMPTZ
+);
+
+CREATE TABLE daily_counts (
+  user_id     BIGINT NOT NULL REFERENCES users(id),
+  local_date  DATE NOT NULL,
+  count       INT NOT NULL CHECK (count >= 0),
+  PRIMARY KEY (user_id, local_date)
+);
+
+-- Feed: keyset pagination over live posts
+CREATE INDEX beer_posts_feed_idx
+  ON beer_posts (created_at DESC, id DESC)
+  WHERE deleted_at IS NULL;
+
+-- Reconciliation and per-user queries
+CREATE INDEX beer_posts_user_date_idx
+  ON beer_posts (user_id, local_date);
+```
+
+**Design notes:**
+
+- `daily_counts` is updated in the same transaction as every insert or soft delete, so reading a month or year is a small indexed sum instead of a scan over posts.
+- A reconciliation test recomputes counts from `beer_posts` and compares them with `daily_counts`. Any mismatch is a defect.
+- Feed pagination uses the cursor `(created_at, id)`, not offsets, so pages stay stable and fast as data grows.
+
+**Day boundary:** `local_date` is computed when a post is saved, as the date of `consumed_at` in the poster’s time zone after subtracting 5 hours, for example `((consumed_at AT TIME ZONE time_zone) - interval '5 hours')::date`. A post at 4:59 am therefore belongs to the previous day and one at 5:00 am starts a new day. The same cutoff drives the “today” totals shown in the app.
+
+## 8. API outline
+
+| Method and path | Purpose | Auth |
+| --- | --- | --- |
+| POST /auth/register | Create account with invite code | None |
+| POST /auth/login | Obtain session token | None |
+| GET /feed?cursor= | Next page of posts | Required |
+| POST /beers | Upload image and create a post | Required |
+| DELETE /beers/:id | Soft-delete own post | Required |
+| GET /stats/me | Day, month and year counts | Required |
+| GET /stats/leaderboard?period=day\|month\|year | Everyone’s counts | Required |
+| GET /health | Liveness and readiness check | None |
+
+The API publishes an OpenAPI specification, which the API tests validate responses against.
+
+## 9. Test strategy
+
+**Levels and tools**
+
+- **Unit (Vitest):** counting logic, date and time zone handling, validation, cursor encoding.
+- **Integration (Vitest with a real Postgres container):** database queries, transactions, the daily-count update.
+- **API (Playwright API tests or Supertest, plus a Postman and Newman collection):** every endpoint for success, validation errors, authentication, authorization and rate limits; response schema checks against OpenAPI.
+- **End to end (Playwright):** sign up, log in, upload, see the post in the feed, see counts change, delete.
+- **Performance (k6):** see section 10.
+- **Security basics:** dependency audit in CI, an OWASP ZAP baseline scan, upload abuse cases.
+
+**Entry and exit criteria**
+
+- A pull request merges only when lint, unit, integration and API tests pass.
+- A release to prod requires a green E2E suite and no open critical or high defects.
+- Coverage target: 80% on business logic, with 100% of the counting rules covered by named tests.
+
+**Key counting test cases**
+
+- Posts at 4:59 am and 5:00 am land on different days, while posts at 11:59 pm and 12:01 am land on the same day.
+- Posts across a month boundary and across New Year land in the right month and year, including a 2:00 am post on the 1st counting toward the previous month or year.
+- Two users in different time zones posting at the same instant get different `local_date` values.
+- Changing time zone does not alter past counts.
+- Deleting a post decrements the right day; deleting twice does not decrement twice.
+- Daylight saving transition days are counted correctly.
+- Two simultaneous uploads from one user produce the correct total.
+- Reconciliation: counts always match the posts.
+
+**Defect handling:** defects are GitHub Issues with severity and area labels, a reproduction, expected versus actual results, and a linked fix. The best ones become write-ups on the showcase page.
+
+## 10. Performance test plan
+
+- **Seed data:** about 50,000 posts across 12 months and 10 to 20 users, with realistic image sizes.
+- **Load:** ramp to 50 concurrent users mixing feed reads (70%), stats (20%) and uploads (10%), held for 10 minutes.
+- **Stress:** keep increasing load until error rate or latency breaks the targets, and record the breaking point and the bottleneck.
+- **Spike:** sudden jump from 5 to 100 users, observing recovery.
+- **Soak (optional):** 1 hour at moderate load to catch leaks.
+- **Method:** run each scenario three times, compare medians, change one thing at a time, and record results in the repository.
+- **Metrics:** p50, p95 and p99 latency, throughput, error rate, plus CPU, memory and database query time.
+
+## 11. Milestones
+
+1. Requirements, test plan and schema agreed; repository and CI skeleton running.
+2. Auth, upload and feed working with unit and integration tests.
+3. Counting logic complete and fully tested; frontend slice working.
+4. API and E2E suites in CI; v1 deployed to prod.
+5. Perf environment, baseline, one fixed bottleneck, and a before-and-after report.
+6. Showcase page live; README, architecture diagram and write-ups finished.
+
+## 12. Risks and open decisions
+
+**Risks**
+
+- Time zone and “what is a day” bugs. *Mitigation:* the rules in section 4 and boundary tests.
+- Scope creep. *Mitigation:* freeze v1 scope and keep a backlog.
+- Large images slowing the feed or exceeding storage. *Mitigation:* size limits, resizing, thumbnails, pagination.
+- Noisy performance numbers. *Mitigation:* resource limits, repeated runs, relative reporting.
+- Misuse if the app becomes public. *Mitigation:* stay invite-only until rate limiting, upload validation, reporting and age gating are in place.
+
+**Open decisions**
+
+- Is the 5:00 am day boundary fixed for everyone, or should it be configurable per user?
+- How far back can a post be backdated (currently 48 hours)?
+- Session mechanism: short-lived JWT with refresh, or server-side sessions?
+- Hosting provider for the app and database, after checking current pricing.

@@ -30,6 +30,7 @@ Each requirement has an ID so tests can be traced back to it.
 - **FR-6 Leaderboard.** A logged-in user can view everyone’s counts for day, month or year. *Acceptance:* ties share a rank; results match the underlying posts.
 - **FR-7 Delete.** A user can delete only their own posts. *Acceptance:* the post disappears from the feed and counts decrease; deleting someone else’s post returns 403.
 - **FR-8 Testing showcase.** A page viewable without login links to the test plan, latest reports, coverage, performance baselines and a write-up of defects found. *Acceptance:* the page is generated from the latest CI run, not edited by hand.
+- **FR-9 Automation suite.** The repository contains an automation suite in the `automation/` folder that organizes the API, UI and performance tests as one framework. *Acceptance:* the suite has its own dependencies and a README explaining how to run it and how it is designed; tests are tagged so a smoke subset runs on every pull request, the full regression suite runs nightly, and a minimal read-only smoke subset runs against prod after each deploy; failed tests keep traces and screenshots; flaky tests follow a documented retry and quarantine policy; reports are published to GitHub Pages and feed the testing showcase page (FR-8).
 
 ## 4. Counting rules (proposed defaults)
 
@@ -72,6 +73,37 @@ A React single-page app calls a Fastify API, which uses PostgreSQL for data and 
 | Prod | Small cloud host, managed Postgres, object storage | Real data | Friends using the app |
 
 Shared CI runners and laptops produce noisy numbers, so performance results are reported as relative change (before and after a fix) rather than absolute capacity.
+
+**Automation suite layout (inside the same repository)**
+
+```text
+beer-feed/
+├── .github/workflows/   # CI pipelines
+├── backend/             # API code, with unit and integration tests alongside
+├── frontend/            # React app
+├── automation/
+│   ├── api/             # API tests and OpenAPI schema checks
+│   ├── ui/              # Playwright tests, page objects, fixtures
+│   ├── perf/            # k6 scripts and recorded baselines
+│   ├── support/         # test data factories, auth helpers, seed and cleanup scripts
+│   ├── config/          # per-environment settings
+│   └── README.md        # how to run it and how it is designed
+├── docs/
+├── docker-compose.yml
+└── README.md
+```
+
+The `automation/` folder has its own `package.json` so its dependencies stay separate from the app’s, and the suite can be run on its own. Framework features such as tagging, sharding, reporting, flaky-test quarantine and accessibility scans are added only when a real test needs them.
+
+**CI schedule (proposed)**
+
+| Trigger | What runs | Purpose |
+| --- | --- | --- |
+| Every pull request | Lint, unit and integration tests, plus the automation smoke subset | Fast feedback, and the required checks on main |
+| Merge to main | Full API suite and E2E regression against the test environment | Confirm main is healthy |
+| Nightly | Full regression across browsers, accessibility scans, and the report published to GitHub Pages | Catch slow regressions and keep the showcase current |
+| Weekly | k6 load scenario in the perf environment, with results recorded | Track performance trends |
+| After each deploy to prod | Minimal read-only smoke subset against prod | Confirm the release works |
 
 ## 7. Data model
 
@@ -157,6 +189,7 @@ The API publishes an OpenAPI specification, which the API tests validate respons
 - **End to end (Playwright):** sign up, log in, upload, see the post in the feed, see counts change, delete.
 - **Performance (k6):** see section 10.
 - **Security basics:** dependency audit in CI, an OWASP ZAP baseline scan, upload abuse cases.
+- **Automation suite:** the API, UI and performance tests above are organized as one framework in `automation/` (see section 6 and FR-9), with tagging, parallel runs, failure artifacts and published reports.
 
 **Entry and exit criteria**
 
@@ -203,7 +236,7 @@ The API publishes an OpenAPI specification, which the API tests validate respons
 1. Requirements, test plan and schema agreed; repository and CI skeleton running.
 2. Auth, upload and feed working with unit and integration tests.
 3. Counting logic complete and fully tested; frontend slice working.
-4. API and E2E suites in CI; v1 deployed to prod.
+4. Automation suite skeleton in CI with the API and E2E suites running in it; v1 deployed to prod.
 5. Perf environment, baseline, one fixed bottleneck, and a before-and-after report.
 6. Showcase page live; README, architecture diagram and write-ups finished.
 
@@ -216,6 +249,7 @@ The API publishes an OpenAPI specification, which the API tests validate respons
 - Large images slowing the feed or exceeding storage. *Mitigation:* size limits, resizing, thumbnails, pagination.
 - Noisy performance numbers. *Mitigation:* resource limits, repeated runs, relative reporting.
 - Misuse if the app becomes public. *Mitigation:* stay invite-only until rate limiting, upload validation, reporting and age gating are in place.
+- Over-engineering the automation suite before there are tests to justify it. *Mitigation:* add each framework feature only when a real test needs it.
 
 **Open decisions**
 

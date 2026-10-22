@@ -17,12 +17,14 @@
   "type": "module",
   "dependencies": {
     "fastify": "^5.12.7",
-    "luxon": "^3.7.2"
+    "luxon": "^3.7.2",
+    "tz-lookup": "^6.1.25"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/luxon": "^3.7.6",
     "@types/node": "^26.6.5",
+    "@types/tz-lookup": "^6.1.2",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.10",

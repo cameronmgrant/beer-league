@@ -3,7 +3,7 @@ import { IANAZone } from 'luxon'
 
 export function assertValidTimeZone(zone: string): void {
   if (!IANAZone.isValidZone(zone)) {
-    throw new Error('Ivalid time zone: "${zone}"')
+    throw new Error('Invalid time zone: "${zone}"')
   }
 }
 export function timeZoneFromCoordinates(

@@ -1,7 +1,8 @@
 {
   "name": "beer-league",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-24-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" },
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },

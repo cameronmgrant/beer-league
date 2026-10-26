@@ -9,22 +9,29 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "dotenv": "^18.0.9",
+    "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.7",
     "luxon": "^3.7.2",
+    "pg": "^8.23.1",
     "tz-lookup": "^6.1.25"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/luxon": "^3.7.6",
     "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
     "@types/tz-lookup": "^6.1.2",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.10",
@@ -32,5 +39,8 @@
     "typescript": "~6.0.0",
     "typescript-eslint": "^8.72.0",
     "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

@@ -16,6 +16,22 @@ jobs:
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: beer
+          POSTGRES_PASSWORD: beer
+          POSTGRES_DB: beer_league_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U beer -d beer_league_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://beer:beer@localhost:5432/beer_league_test
     defaults:
       run:
         working-directory: backend

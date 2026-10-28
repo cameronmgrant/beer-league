@@ -1,0 +1,75 @@
+# Beer League: Future Enhancements
+
+*Draft v0.1 · October 28, 2026 · Maintained alongside the requirements doc*
+
+## How to use this list
+
+These are ideas, not commitments, and nothing here blocks the v1 launch. Each row says who suggested it (**You** or **Claude**), how much work it is (**S** is under half a day, **M** is a few sessions, **L** is a project of its own), and when it makes sense. When you pick one up, turn it into a GitHub issue, and if it changes how the app behaves, add it to the requirements doc first.
+
+## Suggested order after launch
+
+1. Reconciliation as a scheduled job with alerting, which is cheap and protects every count
+2. A performance baseline, then fixing the biggest bottleneck, which also shows whether caching is needed at all
+3. The testing showcase page
+4. Sticky current location (your idea)
+5. Install-to-phone support
+6. Mutation testing on the counting functions
+
+## Product features
+
+| Enhancement | Why it is worth doing | Source | Effort | Best time |
+| --- | --- | --- | --- | --- |
+| Sticky current location | Users pick where they are at upload, and it becomes the default zone for later uploads until changed, so travellers count their days correctly and photos with no GPS are read in the right zone | You | M | After launch |
+| Edit a post’s time | Fixes mistakes without delete and repost; the count has to move between days inside one transaction, which makes a good test case | Claude | M | After launch |
+| Members can create invites | Removes you as the bottleneck; limit each member to a few active codes | Claude | S | When friends ask |
+| Profile pages and a beer calendar | See a friend’s history by day, month and year | Claude | M | After launch |
+| Streaks and monthly recaps | A “winner of the month” and streaks give people a reason to come back, using data you already store | Claude | M | After launch |
+| Beer details | Tag the beer name, brewery or style when posting, which opens richer stats | Claude | M | After launch |
+| Duplicate photo detection | A hash of the image stops the same photo being counted twice | Claude | S | After launch |
+| Likes and comments | The standard social features that were left out of v1 | Claude | M | If friends ask |
+| Notifications | For example when a friend posts or overtakes you on the leaderboard | Claude | L | Later |
+| Install on a phone (PWA) with camera capture | Photos are taken on phones, so this makes posting faster | Claude | M | After launch |
+
+## If the app goes public
+
+You said the app might become public later. These should all be done before that happens, and none are needed while it stays invite-only.
+
+| Enhancement | Why | Source | Effort |
+| --- | --- | --- | --- |
+| Reporting and moderation tools | Public photo content needs a way to remove abuse | Claude | L |
+| Account deletion and data export | Expected of any public app, and a good habit even for a private one | Claude | M |
+| Email verification and password reset | Needs an email service | Claude | M |
+| Stronger age checks than a checkbox | Legal advice is worth getting here, since this is not something to guess | Claude | L |
+| Abuse protection | Stricter rate limits, and a CAPTCHA on sign-up | Claude | M |
+| Terms of service and privacy policy | Also check any rules that apply to alcohol-related content where your users live | Claude | S |
+
+## Performance and operations
+
+| Enhancement | Why | Source | Effort | Best time |
+| --- | --- | --- | --- | --- |
+| Reconciliation as a scheduled job with alerting | Catches any drift between posts and counts in production | Claude | S | Right after deploy |
+| Redis cache for the feed and leaderboard | Only worth it if the performance baseline shows a need | Claude | M | After the baseline |
+| Image CDN and signed URLs | Takes photo traffic off the app server | Claude | M | When image traffic grows |
+| Observability with Prometheus and Grafana | Dashboards for latency, errors and database load | Claude | M | After launch |
+| Backup restore drill | A backup you have never restored is only a hope | Claude | S | Soon after launch |
+| Infrastructure as code and blue/green deploys | Repeatable environments and releases with no downtime | Claude | L | Later |
+| Dependabot, and upgrading to TypeScript 7 | Keeps dependencies current; the upgrade waits until typescript-eslint supports TypeScript 7 | Claude | S | When available |
+
+## Testing showcase additions
+
+| Enhancement | Why | Source | Effort |
+| --- | --- | --- | --- |
+| Mutation testing on the counting functions | Shows the quality of your tests, beyond how much code they cover | Claude | M |
+| Contract testing | Checks that the frontend and API agree on the shape of every response | Claude | M |
+| Visual regression for the feed layout | Catches accidental layout changes | Claude | M |
+| Accessibility scans in the nightly run | Catches common accessibility problems automatically | Claude | S |
+| Security scan in CI | An automated baseline scan of the running app | Claude | S |
+| Failure drills | Stop the database or kill the server mid-upload, then verify that no post is half-saved and reconciliation stays clean | Claude | M |
+| Flaky-test tracking | A record of which tests fail intermittently and why | Claude | S |
+| Decision records | Short notes in docs/decisions, written as you make each choice | Claude | S |
+
+## Parking lot
+
+Add your own ideas here, one line each.
+
+- (your ideas go here)

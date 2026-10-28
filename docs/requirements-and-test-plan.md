@@ -1,6 +1,6 @@
 # Beer Feed: Requirements, Test Plan and Data Model
 
-*Draft v0.1 · October 20, 2026 · Personal portfolio project*
+*Draft v0.3 · October 28, 2026 · Personal portfolio project*
 
 ## 1. Purpose and scope
 
@@ -17,6 +17,7 @@ Beer Feed is an invite-only social feed where a small group of friends post a ph
 - Hosting budget is about $10 per month. Images live in S3-compatible storage.
 - Soft target: v1 deployed around the end of 2026, with learning work continuing afterward.
 - Available time: 5 to 10 hours per week.
+- Development moves to GitHub Codespaces from the database phase onward, so PostgreSQL and Docker run on a standard Linux environment that matches CI.
 
 ## 3. Functional requirements
 
@@ -24,25 +25,25 @@ Each requirement has an ID so tests can be traced back to it.
 
 - **FR-1 Sign-up.** A visitor with a valid, unused, unexpired invite code can create an account with a username, password and time zone. *Acceptance:* invalid, used or expired codes are rejected; duplicate usernames are rejected; passwords are stored hashed.
 - **FR-2 Login.** A user can log in with username and password. *Acceptance:* valid credentials return a session token; invalid credentials return 401 without revealing which field was wrong; repeated failures are rate limited.
-- **FR-3 Post a beer.** A logged-in user can upload one image (JPEG, PNG or WebP, max 5 MB) with an optional caption (max 140 characters) and the time it was drunk (taken from the photo’s EXIF “date taken” field when present, otherwise the current time, and always adjustable by the user). *Acceptance:* wrong file types and oversized files are rejected; a thumbnail is generated; the EXIF date, when present, pre-fills the time and the user can change it; the final time is validated against the counting rules in section 4; all metadata, including GPS location, is stripped from stored images and thumbnails; the daily count is updated in the same database transaction as the post.
-- **FR-4 Feed.** All logged-in users see all posts, newest first, paged by cursor, 20 per page. *Acceptance:* no duplicates or gaps across pages even when new posts arrive mid-scroll; deleted posts never appear.
+- **FR-3 Post a beer.** A logged-in user can upload one image (JPEG, PNG or WebP, max 5 MB) with an optional caption (max 140 characters) and the time it was drunk (defaulting to the photo’s EXIF “date taken” time, which the user can change; if the photo has none, the user must enter it). *Acceptance:* wrong file types and oversized files are rejected; a thumbnail is generated; the EXIF date, when present, pre-fills the time and stays visible even if the user changes it; a post with neither an EXIF date nor a manual time is rejected; the final time is validated against the counting rules in section 4; all metadata, including GPS location, is stripped from stored images and thumbnails; the daily count is updated in the same database transaction as the post.
+- **FR-4 Feed.** All logged-in users see all posts, newest first, paged by cursor, 20 per page. *Acceptance:* no duplicates or gaps across pages even when new posts arrive or posts are deleted mid-scroll; posts are ordered by upload time, with the post id breaking ties; each post includes its author’s username and no password data is ever returned; deleted posts never appear.
 - **FR-5 Personal counts.** A user can see their own count for today, this month and this year. *Acceptance:* totals follow the counting rules in section 4, and “today” resets at 5:00 am in the user’s time zone.
-- **FR-6 Leaderboard.** A logged-in user can view everyone’s counts for day, month or year. *Acceptance:* ties share a rank; results match the underlying posts.
-- **FR-7 Delete.** A user can delete only their own posts. *Acceptance:* the post disappears from the feed and counts decrease; deleting someone else’s post returns 403.
+- **FR-6 Leaderboard.** A logged-in user can view everyone’s counts for day, month or year. *Acceptance:* ties share a rank and the next rank is skipped (counts of 5, 3, 3, 1 are ranked 1, 2, 2, 4); people with no posts in the period appear with a count of 0; results match the underlying posts.
+- **FR-7 Delete.** A user can delete only their own posts. *Acceptance:* the post is soft-deleted, disappears from the feed, and the count for the post’s own day decreases by one; deleting the same post twice changes nothing (the second attempt is not found); deleting someone else’s post returns 403.
 - **FR-8 Testing showcase.** A page viewable without login links to the test plan, latest reports, coverage, performance baselines and a write-up of defects found. *Acceptance:* the page is generated from the latest CI run, not edited by hand.
 - **FR-9 Automation suite.** The repository contains an automation suite in the `automation/` folder that organizes the API, UI and performance tests as one framework. *Acceptance:* the suite has its own dependencies and a README explaining how to run it and how it is designed; tests are tagged so a smoke subset runs on every pull request, the full regression suite runs nightly, and a minimal read-only smoke subset runs against prod after each deploy; failed tests keep traces and screenshots; flaky tests follow a documented retry and quarantine policy; reports are published to GitHub Pages and feed the testing showcase page (FR-8).
 
 ## 4. Counting rules (proposed defaults)
 
-1. Every post stores `consumed_at` (a UTC instant) and `local_date`, calculated at post time from the poster’s own time zone, with each day starting at 5:00 am local time.
+1. Every post stores `consumed_at` (a UTC instant) and `local_date`, calculated at post time in the time zone where the photo was taken (see Photo time below), with each day starting at 5:00 am local time.
 2. Day, month and year are all based on `local_date`, so a beer logged at 11:50 pm counts for that same day. The day starts at 5:00 am, so a beer at 4:59 am still counts for the previous day and one at 5:00 am starts a new day. The same cutoff applies to months and years, so a beer at 2:00 am on January 1 counts toward December 31.
 3. Changing a user’s time zone affects future posts only. Existing `local_date` values never change.
 4. Deleting a post decrements the count for its `local_date`. Deleted posts are soft-deleted and never counted.
-5. `consumed_at` cannot be in the future and cannot be more than 48 hours in the past, whether the time came from the photo, the upload or a manual edit.
+5. `consumed_at` cannot be more than 5 minutes in the future (a tolerance for phone clock drift) and cannot be more than 7 days in the past, whether the time came from the photo or a manual edit.
 6. Month and year totals are sums of daily counts over the `local_date` range.
 7. Daylight saving changes (23-hour and 25-hour days) must not drop or double-count posts, and the 5:00 am day boundary must hold on those days.
 
-**Photo time:** `consumed_at` is read from the photo’s EXIF “date taken” field when present. EXIF times usually carry no time zone, so such a time is interpreted in the poster’s saved time zone. If the file includes an explicit offset, the instant is taken from it and converted to the poster’s time zone to find the day. With no EXIF date, the upload time is used. The user can always adjust the suggested time before posting, and the final time must pass rule 5.
+**Photo time:** `consumed_at` defaults to the photo’s EXIF “date taken” time, which the user can change while the EXIF time stays visible. If the photo has no EXIF date, the user must enter a time, and the post is rejected without one. EXIF times carry no time zone, so the text is read using the file’s offset if it has one, otherwise the time zone worked out from the photo’s GPS location, otherwise the poster’s account time zone. The day is counted in the zone where the photo was taken: the photo’s GPS zone if there is one, otherwise the zone given by the EXIF offset, otherwise the poster’s account time zone. A manual time is counted in the same zone. The final time must pass rule 5.
 
 ## 5. Non-functional requirements
 
@@ -55,7 +56,7 @@ Each requirement has an ID so tests can be traced back to it.
 
 **Security:** hashed passwords (argon2 or bcrypt), HTTPS only, upload type and size validation, rate limiting on login and upload, no secrets in the repository.
 
-**Privacy:** photos are visible only to logged-in members. Image URLs must not be guessable or publicly listable (signed URLs or an authenticated proxy), and all photo metadata, including GPS location, is removed from stored images and thumbnails.
+**Privacy:** photos are visible only to logged-in members. Image URLs must not be guessable or publicly listable (signed URLs or an authenticated proxy), and all photo metadata, including GPS location, is removed from stored images and thumbnails. GPS coordinates are read only to work out the time zone and are never stored; only the zone name is kept.
 
 **Reliability:** daily database backups, and the app restarts cleanly after a crash.
 
@@ -67,7 +68,7 @@ A React single-page app calls a Fastify API, which uses PostgreSQL for data and 
 
 | Environment | Where it runs | Data | Used for |
 | --- | --- | --- | --- |
-| Dev | Local Docker Compose | Small seed fixtures | Day-to-day building |
+| Dev | Docker Compose in GitHub Codespaces | Small seed fixtures | Day-to-day building |
 | Test | Ephemeral Compose stack in GitHub Actions, one per pull request | Small seeded set | Unit, integration, API and E2E tests |
 | Perf | Separate Compose stack with fixed CPU and memory limits | About 50,000 generated posts | Load, stress and spike tests |
 | Prod | Small cloud host, managed Postgres, object storage | Real data | Friends using the app |
@@ -118,7 +119,7 @@ CREATE TABLE users (
 
 CREATE TABLE invites (
   code        TEXT PRIMARY KEY,
-  created_by  BIGINT NOT NULL REFERENCES users(id),
+  created_by  BIGINT REFERENCES users(id),   -- null when an admin script created the invite
   used_by     BIGINT REFERENCES users(id),
   expires_at  TIMESTAMPTZ NOT NULL,
   used_at     TIMESTAMPTZ
@@ -131,7 +132,8 @@ CREATE TABLE beer_posts (
   thumb_key    TEXT NOT NULL,
   caption      TEXT CHECK (char_length(caption) <= 140),
   consumed_at  TIMESTAMPTZ NOT NULL,
-  time_source  TEXT NOT NULL CHECK (time_source IN ('exif', 'upload', 'manual')),
+  time_source  TEXT NOT NULL CHECK (time_source IN ('exif', 'manual')),
+  time_zone    TEXT NOT NULL,            -- zone the day was counted in, e.g. 'Asia/Tokyo' or 'UTC+09:00'
   local_date   DATE NOT NULL,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at   TIMESTAMPTZ
@@ -157,12 +159,12 @@ CREATE INDEX beer_posts_user_date_idx
 **Design notes:**
 
 - `daily_counts` is updated in the same transaction as every insert or soft delete, so reading a month or year is a small indexed sum instead of a scan over posts.
-- A reconciliation test recomputes counts from `beer_posts` and compares them with `daily_counts`. Any mismatch is a defect.
+- A reconciliation test recomputes counts from `beer_posts` and compares them with `daily_counts`. Any mismatch is a defect. The check reads both tables in one snapshot, so it never raises a false alarm while posts are being made, and it only reports problems, never repairs them.
 - Feed pagination uses the cursor `(created_at, id)`, not offsets, so pages stay stable and fast as data grows.
 
-**Day boundary:** `local_date` is computed when a post is saved, as the date of `consumed_at` in the poster’s time zone after subtracting 5 hours, for example `((consumed_at AT TIME ZONE time_zone) - interval '5 hours')::date`. A post at 4:59 am therefore belongs to the previous day and one at 5:00 am starts a new day. The same cutoff drives the “today” totals shown in the app.
+**Day boundary:** `local_date` is computed when a post is saved, as the date of `consumed_at` in the post’s time zone (the zone where the photo was taken, stored in time\_zone) after subtracting 5 hours, calculated by the application with `getLocalDate(consumed_at, time_zone)`. A post at 4:59 am therefore belongs to the previous day and one at 5:00 am starts a new day. The same cutoff drives the “today” totals shown in the app. Stored zones are place names such as Asia/Tokyo or fixed offsets such as UTC+09:00, so the day is always calculated by the application, never in SQL.
 
-**Time source:** `consumed_at` comes from the photo’s EXIF date when available, otherwise from the upload time or the user’s manual edit, and `time_source` records which. `created_at` always stays the real upload time.
+**Time source:** `consumed_at` defaults to the photo’s EXIF date and is replaced by the user’s manual time when they change it or when the photo has none, and `time_source` records which. `created_at` always stays the real upload time.
 
 ## 8. API outline
 
@@ -201,7 +203,7 @@ The API publishes an OpenAPI specification, which the API tests validate respons
 
 - Posts at 4:59 am and 5:00 am land on different days, while posts at 11:59 pm and 12:01 am land on the same day.
 - Posts across a month boundary and across New Year land in the right month and year, including a 2:00 am post on the 1st counting toward the previous month or year.
-- Two users in different time zones posting at the same instant get different `local_date` values.
+- Two photos from different time zones taken at the same instant can get different `local_date` values.
 - Changing time zone does not alter past counts.
 - Deleting a post decrements the right day; deleting twice does not decrement twice.
 - Daylight saving transition days are counted correctly.
@@ -211,13 +213,16 @@ The API publishes an OpenAPI specification, which the API tests validate respons
 **Photo time and metadata**
 
 - A photo with a past EXIF date pre-fills the time, and the post counts for that date, not the upload date.
-- A photo with no EXIF date falls back to the upload time and is recorded with `time_source` set to upload.
-- An EXIF date in the future or more than 48 hours old is rejected unless the user changes it to a valid time.
-- EXIF times just before and just after 5:00 am land on different days.
-- An EXIF time with no offset is read in the poster’s time zone, not the server’s.
-- An EXIF time with an explicit offset different from the poster’s time zone is converted to the poster’s time zone before the day is chosen.
+- A photo with no EXIF date is rejected unless the user enters a time; once entered, it is recorded with `time_source` set to manual.
+- An EXIF date more than 5 minutes in the future, or more than 7 days old, is rejected unless the user changes it to a valid time.
+- EXIF times just before and just after 5:00 am in the photo’s zone land on different days.
+- An EXIF time with no offset is read in the photo’s GPS zone when there is one, otherwise in the poster’s account zone, never the server’s.
+- An EXIF time with an explicit offset fixes the exact moment, and the day is counted in the photo’s GPS zone when there is one, otherwise in the offset’s own zone.
 - A user editing the suggested time produces a post with `time_source` set to manual.
 - A photo containing GPS data has all metadata removed from the stored image and the thumbnail, checked by re-reading the stored files.
+- The day is counted in the photo’s zone, not the account zone: a photo whose moment is January 15 in Tokyo and January 14 in New York counts for January 15 when its GPS zone is Tokyo.
+- A manual time is counted in the photo’s GPS zone when there is one, otherwise in the zone from the EXIF offset, otherwise in the account zone.
+- GPS coordinates of exactly 0, 0, or a failed location lookup, count as no location.
 
 **Defect handling:** defects are GitHub Issues with severity and area labels, a reproduction, expected versus actual results, and a linked fix. The best ones become write-ups on the showcase page.
 
@@ -254,6 +259,7 @@ The API publishes an OpenAPI specification, which the API tests validate respons
 **Open decisions**
 
 - Is the 5:00 am day boundary fixed for everyone, or should it be configurable per user?
-- How far back can a post be backdated (currently 48 hours)?
+- Should the user be able to edit a post’s time after posting? Current proposal: no, delete and repost.
 - Session mechanism: short-lived JWT with refresh, or server-side sessions?
 - Hosting provider for the app and database, after checking current pricing.
+- Future feature: users pick their current location at upload, and it becomes the default zone for their uploads until they change it.

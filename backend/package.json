@@ -18,12 +18,15 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@fastify/swagger": "^9.9.3",
     "dotenv": "^18.0.9",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.7",
+    "fastify-type-provider-zod": "^7.0.0",
     "luxon": "^3.7.2",
     "pg": "^8.23.1",
-    "tz-lookup": "^6.1.25"
+    "tz-lookup": "^6.1.25",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

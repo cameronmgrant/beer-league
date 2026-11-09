@@ -99,13 +99,11 @@ describe('database', () => {
 
   it('removes a user\u2019s sessions along with the user', async () => {
     const user = await addUser()
-    await db
-      .insert(sessions)
-      .values({
-        tokenHash: 'abc',
-        userId: user.id,
-        expiresAt: new Date('2030-01-01T00:00:00Z'),
-      })
+    await db.insert(sessions).values({
+      tokenHash: 'abc',
+      userId: user.id,
+      expiresAt: new Date('2030-01-01T00:00:00Z'),
+    })
 
     await db.delete(users).where(eq(users.id, user.id))
 

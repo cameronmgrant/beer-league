@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { sql } from 'drizzle-orm'
-import { beerPosts, dailyCounts, users } from './schema.js'
+import { eq, sql } from 'drizzle-orm'
+import { beerPosts, dailyCounts, sessions, users } from './schema.js'
 import { createTestDb, resetTables } from '../test/test-db.js'
 
 const { db, pool } = createTestDb()
@@ -53,7 +53,7 @@ describe('database', () => {
     expect(result.rows[0]).toEqual({ ok: 1 })
   })
 
-  it('has all four tables', async () => {
+  it('has every table', async () => {
     const result = await db.execute(
       sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`,
     )
@@ -64,6 +64,7 @@ describe('database', () => {
         'invites',
         'beer_posts',
         'daily_counts',
+        'sessions',
       ]),
     )
   })
@@ -74,6 +75,41 @@ describe('database', () => {
     await resetTables(db)
     expect(await db.select().from(users)).toHaveLength(0)
     expect(await db.select().from(beerPosts)).toHaveLength(0)
+  })
+  it.each([
+    'Alice',
+    'ab',
+    'a'.repeat(21),
+    'bad name',
+    'émile',
+    'no-dashes',
+    '',
+  ])('rejects the username "%s"', async (username) => {
+    const rule = await violatedConstraint(addUser(username))
+    expect(rule).toBe('username_format')
+  })
+
+  it.each(['abc', 'a'.repeat(20), 'under_score9', '123'])(
+    'accepts the username "%s"',
+    async (username) => {
+      await addUser(username)
+      expect(await db.select().from(users)).toHaveLength(1)
+    },
+  )
+
+  it('removes a user\u2019s sessions along with the user', async () => {
+    const user = await addUser()
+    await db
+      .insert(sessions)
+      .values({
+        tokenHash: 'abc',
+        userId: user.id,
+        expiresAt: new Date('2030-01-01T00:00:00Z'),
+      })
+
+    await db.delete(users).where(eq(users.id, user.id))
+
+    expect(await db.select().from(sessions)).toHaveLength(0)
   })
 })
 

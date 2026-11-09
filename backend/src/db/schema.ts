@@ -11,15 +11,40 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core'
 
-export const users = pgTable('users', {
-  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
-  username: text('username').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
-  timeZone: text('time_zone').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-})
+export const users = pgTable(
+  'users',
+  {
+    id: bigint('id', { mode: 'number' })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    username: text('username').notNull().unique(),
+    passwordHash: text('password_hash').notNull(),
+    timeZone: text('time_zone').notNull(),
+    ageConfirmedAt: timestamp('age_confirmed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [check('username_format', sql`${t.username} ~ '^[a-z0-9_]{3,20}$'`)],
+)
+
+export const sessions = pgTable(
+  'sessions',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index('sessions_user_idx').on(t.userId),
+    index('sessions_expires_idx').on(t.expiresAt),
+  ],
+)
 
 export const invites = pgTable('invites', {
   code: text('code').primaryKey(),

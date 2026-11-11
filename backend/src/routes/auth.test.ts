@@ -235,6 +235,21 @@ describe('POST /auth/register: success', () => {
     const [row] = await ctx.db.select().from(users)
     expect(row?.username).toBe('alice')
   })
+  it('accepts an invite code typed in capitals with spaces around it', async () => {
+    const invite = await addInvite(ctx.db, {
+      code: 'abcd-efgh-jkmn',
+      expiresAt: new Date(Date.now() + DAY),
+    })
+
+    const res = await post(urls.register, body(' ABCD-EFGH-JKMN '))
+
+    expect(res.statusCode).toBe(201)
+    const [row] = await ctx.db
+      .select()
+      .from(invites)
+      .where(eq(invites.code, invite.code))
+    expect(row?.usedAt).not.toBeNull()
+  })
 })
 describe('POST /auth/register: rejections', () => {
   it.each([

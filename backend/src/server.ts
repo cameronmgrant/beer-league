@@ -9,6 +9,9 @@ const app = buildApp({
   db,
   logLevel: config.logLevel,
   cookieSecure: config.nodeEnv === 'production',
+  allowedOrigins: config.allowedOrigins,
+  trustProxyHops: config.trustProxyHops,
+  authRateLimit: config.authRateLimit,
 })
 
 async function shutdown(signal: string): Promise<void> {

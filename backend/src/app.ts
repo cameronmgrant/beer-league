@@ -8,13 +8,16 @@ import {
 import type { Db } from './db/client.js'
 import { errorHandler, notFoundHandler } from './errors.js'
 import { registerHealthRoute } from './routes/health.js'
+import { registerAuth } from './auth/plugin.js'
+import { registerAuthRoutes } from './routes/auth.js'
 
 export interface AppOptions {
   db: Db
   logLevel?: string | undefined
+  cookieSecure?: boolean | undefined
 }
 
-export function buildApp({ db, logLevel }: AppOptions) {
+export function buildApp({ db, logLevel, cookieSecure = false }: AppOptions) {
   const app = Fastify({
     logger: logLevel === undefined ? false : { level: logLevel },
   })
@@ -34,10 +37,12 @@ export function buildApp({ db, logLevel }: AppOptions) {
 
   app.register(
     async (api) => {
+      await registerAuth(api, db, { cookieSecure })
       api.get('/openapi.json', { schema: { hide: true } }, async () =>
         app.swagger(),
       )
       registerHealthRoute(api, db)
+      registerAuthRoutes(api, db, { cookieSecure })
     },
     { prefix: '/api/v1' },
   )

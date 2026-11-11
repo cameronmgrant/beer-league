@@ -7,3 +7,11 @@ export const errorResponseSchema = z.object({
     details: z.unknown().optional(),
   }),
 })
+
+export const userSchema = z.object({
+  id: z.number().int(),
+  username: z.string(),
+  timeZone: z.string(),
+})
+
+export const userResponseSchema = z.object({ user: userSchema })

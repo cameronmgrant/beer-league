@@ -5,7 +5,11 @@ import { createDb } from './db/client.js'
 
 const config = loadConfig(process.env)
 const { db, pool } = createDb(config.databaseUrl)
-const app = buildApp({ db, logLevel: config.logLevel })
+const app = buildApp({
+  db,
+  logLevel: config.logLevel,
+  cookieSecure: config.nodeEnv === 'production',
+})
 
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, 'shutting down')

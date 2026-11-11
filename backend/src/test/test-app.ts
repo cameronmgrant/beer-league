@@ -4,9 +4,12 @@ import { createTestDb } from './test-db.js'
 
 // Builds the real app on top of the test database. The optional callback lets a
 // test add routes of its own before the app starts.
-export async function createTestApp(extend?: (app: FastifyInstance) => void) {
+export async function createTestApp(
+  extend?: (app: FastifyInstance) => void,
+  options: { cookieSecure?: boolean } = {},
+) {
   const { db, pool } = createTestDb()
-  const app = buildApp({ db })
+  const app = buildApp({ db, ...options })
   extend?.(app)
   await app.ready()
 

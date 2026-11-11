@@ -14,6 +14,7 @@ import {
   setSessionCookie,
 } from '../auth/plugin.js'
 import { createSession, deleteSession } from '../auth/sessions.js'
+import { authRouteLimit, type AuthRateLimit } from '../security/plugin.js'
 
 const registerBody = z.object({
   username: z
@@ -31,7 +32,7 @@ const registerBody = z.object({
       (value) => IANAZone.isValidZone(value),
       'must be a valid IANA time zone',
     ),
-  inviteCode: z.string().min(1).max(100),
+  inviteCode: z.string().trim().toLowerCase().min(1).max(100),
   ageConfirmed: z.literal(true),
 })
 
@@ -43,10 +44,10 @@ const loginBody = z.object({
 export function registerAuthRoutes(
   app: FastifyInstance,
   db: Db,
-  options: { cookieSecure: boolean },
+  options: { cookieSecure: boolean; authRateLimit: AuthRateLimit },
 ): void {
   const api = app.withTypeProvider<ZodTypeProvider>()
-
+  const limit = authRouteLimit(options.authRateLimit)
   api.get(
     '/auth/me',
     {
@@ -63,14 +64,17 @@ export function registerAuthRoutes(
   api.post(
     '/auth/register',
     {
+      config: limit,
       schema: {
         summary: 'Create an account with an invite code',
         body: registerBody,
         response: {
           201: userResponseSchema,
           400: errorResponseSchema,
+          403: errorResponseSchema,
           409: errorResponseSchema,
           422: errorResponseSchema,
+          429: errorResponseSchema,
         },
       },
     },
@@ -107,6 +111,7 @@ export function registerAuthRoutes(
   api.post(
     '/auth/login',
     {
+      config: limit,
       schema: {
         summary: 'Log in with a username and password',
         body: loginBody,
@@ -114,6 +119,8 @@ export function registerAuthRoutes(
           200: userResponseSchema,
           400: errorResponseSchema,
           401: errorResponseSchema,
+          403: errorResponseSchema,
+          429: errorResponseSchema,
         },
       },
     },
@@ -143,12 +150,17 @@ export function registerAuthRoutes(
   )
   api.post(
     '/auth/logout',
-    { schema: { summary: 'Log out and end the session' } },
+    {
+      schema: {
+        summary: 'Log out and end the session',
+        response: { 204: z.null(), 403: errorResponseSchema },
+      },
+    },
     async (request, reply) => {
       const token = request.cookies[SESSION_COOKIE]
       if (token) await deleteSession(db, token)
       clearSessionCookie(reply, options.cookieSecure)
-      return reply.status(204).send()
+      return reply.status(204).send(null)
     },
   )
 }

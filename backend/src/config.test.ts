@@ -12,16 +12,23 @@ describe('loadConfig', () => {
       host: '0.0.0.0',
       databaseUrl,
       logLevel: 'info',
+      allowedOrigins: ['http://localhost:3000', 'http://localhost:5173'],
+      trustProxyHops: 0,
+      authRateLimit: { max: 10, windowSeconds: 60 },
     })
   })
 
-  it('reads every setting, turning the port into a number', () => {
+  it('reads every setting, turning numbers into numbers', () => {
     const config = loadConfig({
       ...valid,
       NODE_ENV: 'production',
       PORT: '8080',
       HOST: '127.0.0.1',
       LOG_LEVEL: 'debug',
+      ALLOWED_ORIGINS: 'https://beerleague.example',
+      TRUST_PROXY_HOPS: '1',
+      AUTH_RATE_LIMIT_MAX: '5',
+      AUTH_RATE_LIMIT_WINDOW_SECONDS: '120',
     })
     expect(config).toEqual({
       nodeEnv: 'production',
@@ -29,6 +36,9 @@ describe('loadConfig', () => {
       host: '127.0.0.1',
       databaseUrl,
       logLevel: 'debug',
+      allowedOrigins: ['https://beerleague.example'],
+      trustProxyHops: 1,
+      authRateLimit: { max: 5, windowSeconds: 120 },
     })
   })
 
@@ -60,5 +70,56 @@ describe('loadConfig', () => {
       loadConfig({ DATABASE_URL: 'mysql://user:hunter2@host/db' })
     expect(attempt).toThrow('Invalid configuration')
     expect(attempt).not.toThrow('hunter2')
+  })
+})
+
+describe('loadConfig: protections', () => {
+  it('reads a list of allowed origins, ignoring spaces and empty entries', () => {
+    const config = loadConfig({
+      ...valid,
+      ALLOWED_ORIGINS: ' https://a.example , https://b.example:8443,, ',
+    })
+
+    expect(config.allowedOrigins).toEqual([
+      'https://a.example',
+      'https://b.example:8443',
+    ])
+  })
+
+  it('refuses to run in production without allowed origins', () => {
+    expect(() => loadConfig({ ...valid, NODE_ENV: 'production' })).toThrow(
+      'ALLOWED_ORIGINS',
+    )
+  })
+
+  it.each([
+    ['a bare host name', 'example.com'],
+    ['an origin with a path', 'https://example.com/app'],
+    ['an origin with a trailing slash', 'https://example.com/'],
+    ['an origin in capital letters', 'HTTPS://EXAMPLE.COM'],
+    ['another kind of address', 'ftp://example.com'],
+    ['an empty list', ''],
+    ['a list with one bad entry', 'https://ok.example,nope'],
+  ])('rejects %s as the allowed origins', (_name, origins) => {
+    expect(() => loadConfig({ ...valid, ALLOWED_ORIGINS: origins })).toThrow(
+      'Invalid configuration',
+    )
+  })
+
+  it.each([
+    ['a negative number of proxies', { TRUST_PROXY_HOPS: '-1' }],
+    ['more than five proxies', { TRUST_PROXY_HOPS: '6' }],
+    ['a fractional number of proxies', { TRUST_PROXY_HOPS: '1.5' }],
+    ['a rate limit of zero', { AUTH_RATE_LIMIT_MAX: '0' }],
+    ['a rate limit that is not a number', { AUTH_RATE_LIMIT_MAX: 'lots' }],
+    ['a window of zero seconds', { AUTH_RATE_LIMIT_WINDOW_SECONDS: '0' }],
+    [
+      'a window longer than an hour',
+      { AUTH_RATE_LIMIT_WINDOW_SECONDS: '3601' },
+    ],
+  ])('rejects %s', (_name, extra) => {
+    expect(() => loadConfig({ ...valid, ...extra })).toThrow(
+      'Invalid configuration',
+    )
   })
 })

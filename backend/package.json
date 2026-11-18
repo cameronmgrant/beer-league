@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "invite:create": "tsx src/scripts/create-invites.ts"
+    "invite:create": "tsx src/scripts/create-invites.ts",
+    "photo:inspect": "tsx src/scripts/inspect-photo.ts"
   },
   "keywords": [],
   "author": "",
@@ -25,10 +26,12 @@
     "argon2": "^0.45.2",
     "dotenv": "^18.0.9",
     "drizzle-orm": "^0.45.4",
+    "exifr": "^7.1.3",
     "fastify": "^5.12.7",
     "fastify-type-provider-zod": "^7.0.0",
     "luxon": "^3.7.2",
     "pg": "^8.23.1",
+    "sharp": "^0.35.5",
     "tz-lookup": "^6.1.25",
     "zod": "^4.6.7"
   },

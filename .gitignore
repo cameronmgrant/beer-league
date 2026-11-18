@@ -179,3 +179,4 @@ Thumbs.db
 *.sqlite
 uploads/
 pgdata/
+backend/tmp-photos/

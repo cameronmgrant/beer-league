@@ -228,3 +228,18 @@ describe('newPhotoKeys', () => {
     expect(new Set(ids).size).toBe(2000)
   })
 })
+describe('in-memory storage: test helpers', () => {
+  it('lists its keys in order, and empties itself', async () => {
+    const storage = new InMemoryStorage()
+    await storage.put('photos/b.jpg', Buffer.from('1'))
+    await storage.put('photos/a.jpg', Buffer.from('2'))
+
+    expect(storage.keys()).toEqual(['photos/a.jpg', 'photos/b.jpg'])
+
+    await storage.delete('photos/a.jpg')
+    expect(storage.keys()).toEqual(['photos/b.jpg'])
+
+    storage.clear()
+    expect(storage.keys()).toEqual([])
+  })
+})

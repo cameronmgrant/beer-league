@@ -39,6 +39,13 @@ export class InMemoryStorage implements PhotoStorage {
     assertValidKey(key)
     this.files.delete(key)
   }
+  keys(): string[] {
+    return [...this.files.keys()].sort()
+  }
+
+  clear(): void {
+    this.files.clear()
+  }
 }
 
 export function newPhotoKeys(): { imageKey: string; thumbKey: string } {

@@ -180,3 +180,4 @@ Thumbs.db
 uploads/
 pgdata/
 backend/tmp-photos/
+backend/photo-data/

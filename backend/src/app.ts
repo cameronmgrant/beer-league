@@ -1,3 +1,4 @@
+import fastifyMultipart from '@fastify/multipart'
 import fastifySwagger from '@fastify/swagger'
 import Fastify from 'fastify'
 import {
@@ -5,30 +6,44 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod'
+import { registerAuth } from './auth/plugin.js'
 import type { Db } from './db/client.js'
 import { errorHandler, notFoundHandler } from './errors.js'
-import { registerHealthRoute } from './routes/health.js'
-import { registerAuth } from './auth/plugin.js'
+import { MAX_PIXELS, MAX_UPLOAD_BYTES } from './photos/process.js'
+import type { PhotoStorage } from './photos/storage.js'
 import { registerAuthRoutes } from './routes/auth.js'
+import { registerBeersRoutes } from './routes/beers.js'
+import { registerHealthRoute } from './routes/health.js'
 import { registerProtections, type AuthRateLimit } from './security/plugin.js'
 
 export interface AppOptions {
   db: Db
+  storage: PhotoStorage
   logLevel?: string | undefined
   cookieSecure?: boolean | undefined
   allowedOrigins?: string[] | undefined
   trustProxyHops?: number | undefined
   authRateLimit?: AuthRateLimit | undefined
+  uploadRateLimit?: AuthRateLimit | undefined
+  photoLimits?:
+    | { maxBytes?: number | undefined; maxPixels?: number | undefined }
+    | undefined
 }
 
 export function buildApp({
   db,
+  storage,
   logLevel,
   cookieSecure = false,
   allowedOrigins = [],
   trustProxyHops = 0,
   authRateLimit = { max: 10, windowSeconds: 60 },
+  uploadRateLimit = { max: 20, windowSeconds: 600 },
+  photoLimits = {},
 }: AppOptions) {
+  const maxBytes = photoLimits.maxBytes ?? MAX_UPLOAD_BYTES
+  const maxPixels = photoLimits.maxPixels ?? MAX_PIXELS
+
   const app = Fastify({
     logger: logLevel === undefined ? false : { level: logLevel },
     // Trust the first N addresses nearest to this app (the proxies we run behind),
@@ -57,11 +72,25 @@ export function buildApp({
     async (api) => {
       await registerProtections(api, { allowedOrigins })
       await registerAuth(api, db, { cookieSecure })
+      await api.register(fastifyMultipart, {
+        limits: {
+          fileSize: maxBytes,
+          files: 1,
+          fields: 5,
+          fieldSize: 2048,
+          parts: 6,
+        },
+      })
       api.get('/openapi.json', { schema: { hide: true } }, async () =>
         app.swagger(),
       )
       registerHealthRoute(api, db)
       registerAuthRoutes(api, db, { cookieSecure, authRateLimit })
+      registerBeersRoutes(api, db, {
+        storage,
+        uploadRateLimit,
+        limits: { maxBytes, maxPixels },
+      })
     },
     { prefix: '/api/v1' },
   )

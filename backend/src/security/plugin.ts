@@ -25,6 +25,8 @@ export async function registerProtections(
   options: { allowedOrigins: string[] },
 ): Promise<void> {
   await api.register(rateLimit, {
+    keyGenerator: (request) =>
+      request.user ? `user:${request.user.id}` : request.ip,
     global: false, // only routes that ask for a limit get one
     errorResponseBuilder: () =>
       new AppError(
@@ -52,3 +54,5 @@ export async function registerProtections(
     }
   })
 }
+export type RateLimit = AuthRateLimit
+export const routeLimit = authRouteLimit

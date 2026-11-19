@@ -1,7 +1,7 @@
 import { z } from 'zod/v4'
 
 const DEV_ORIGINS = ['http://localhost:3000', 'http://localhost:5173']
-
+const DEV_PHOTO_DIR = './photo-data'
 // An origin is exactly scheme://host[:port], in lowercase, with no path.
 function isOrigin(value: string): boolean {
   try {
@@ -54,6 +54,14 @@ const schema = z.object({
     .min(1)
     .max(3600)
     .default(60),
+  PHOTO_STORAGE_DIR: z.string().min(1).optional(),
+  UPLOAD_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(1000).default(20),
+  UPLOAD_RATE_LIMIT_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86400)
+    .default(600),
 })
 
 export interface Config {
@@ -65,6 +73,8 @@ export interface Config {
   allowedOrigins: string[]
   trustProxyHops: number
   authRateLimit: { max: number; windowSeconds: number }
+  photoStorageDir: string
+  uploadRateLimit: { max: number; windowSeconds: number }
 }
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
@@ -78,11 +88,16 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
 
   const values = parsed.data
   const production = values.NODE_ENV === 'production'
+
+  const problems: string[] = []
   if (production && values.ALLOWED_ORIGINS === undefined) {
-    throw new Error(
-      'Invalid configuration: ALLOWED_ORIGINS: required when NODE_ENV is production',
-    )
+    problems.push('ALLOWED_ORIGINS: required when NODE_ENV is production')
   }
+  if (production && values.PHOTO_STORAGE_DIR === undefined) {
+    problems.push('PHOTO_STORAGE_DIR: required when NODE_ENV is production')
+  }
+  if (problems.length > 0)
+    throw new Error(`Invalid configuration: ${problems.join('; ')}`)
 
   return {
     nodeEnv: values.NODE_ENV,
@@ -95,6 +110,11 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     authRateLimit: {
       max: values.AUTH_RATE_LIMIT_MAX,
       windowSeconds: values.AUTH_RATE_LIMIT_WINDOW_SECONDS,
+    },
+    photoStorageDir: values.PHOTO_STORAGE_DIR ?? DEV_PHOTO_DIR,
+    uploadRateLimit: {
+      max: values.UPLOAD_RATE_LIMIT_MAX,
+      windowSeconds: values.UPLOAD_RATE_LIMIT_WINDOW_SECONDS,
     },
   }
 }

@@ -15,6 +15,8 @@ describe('loadConfig', () => {
       allowedOrigins: ['http://localhost:3000', 'http://localhost:5173'],
       trustProxyHops: 0,
       authRateLimit: { max: 10, windowSeconds: 60 },
+      photoStorageDir: './photo-data',
+      uploadRateLimit: { max: 20, windowSeconds: 600 },
     })
   })
 
@@ -29,6 +31,9 @@ describe('loadConfig', () => {
       TRUST_PROXY_HOPS: '1',
       AUTH_RATE_LIMIT_MAX: '5',
       AUTH_RATE_LIMIT_WINDOW_SECONDS: '120',
+      PHOTO_STORAGE_DIR: '/var/data/photos',
+      UPLOAD_RATE_LIMIT_MAX: '5',
+      UPLOAD_RATE_LIMIT_WINDOW_SECONDS: '120',
     })
     expect(config).toEqual({
       nodeEnv: 'production',
@@ -39,6 +44,8 @@ describe('loadConfig', () => {
       allowedOrigins: ['https://beerleague.example'],
       trustProxyHops: 1,
       authRateLimit: { max: 5, windowSeconds: 120 },
+      photoStorageDir: '/var/data/photos',
+      uploadRateLimit: { max: 5, windowSeconds: 120 },
     })
   })
 
@@ -116,6 +123,43 @@ describe('loadConfig: protections', () => {
     [
       'a window longer than an hour',
       { AUTH_RATE_LIMIT_WINDOW_SECONDS: '3601' },
+    ],
+  ])('rejects %s', (_name, extra) => {
+    expect(() => loadConfig({ ...valid, ...extra })).toThrow(
+      'Invalid configuration',
+    )
+  })
+})
+describe('loadConfig: uploads', () => {
+  it('names every missing production setting at once', () => {
+    expect(() => loadConfig({ ...valid, NODE_ENV: 'production' })).toThrow(
+      /ALLOWED_ORIGINS.*PHOTO_STORAGE_DIR/,
+    )
+  })
+
+  it('accepts production once both are given', () => {
+    const config = loadConfig({
+      ...valid,
+      NODE_ENV: 'production',
+      ALLOWED_ORIGINS: 'https://beerleague.example',
+      PHOTO_STORAGE_DIR: '/var/data/photos',
+    })
+
+    expect(config.photoStorageDir).toBe('/var/data/photos')
+  })
+
+  it.each([
+    ['an empty photo folder', { PHOTO_STORAGE_DIR: '' }],
+    ['an upload limit of zero', { UPLOAD_RATE_LIMIT_MAX: '0' }],
+    ['an upload limit that is not a number', { UPLOAD_RATE_LIMIT_MAX: 'lots' }],
+    ['an upload limit above 1000', { UPLOAD_RATE_LIMIT_MAX: '1001' }],
+    [
+      'an upload window of zero seconds',
+      { UPLOAD_RATE_LIMIT_WINDOW_SECONDS: '0' },
+    ],
+    [
+      'an upload window longer than a day',
+      { UPLOAD_RATE_LIMIT_WINDOW_SECONDS: '86401' },
     ],
   ])('rejects %s', (_name, extra) => {
     expect(() => loadConfig({ ...valid, ...extra })).toThrow(

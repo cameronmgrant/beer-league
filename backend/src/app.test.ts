@@ -5,6 +5,7 @@ import { buildApp } from './app.js'
 import { AppError } from './errors.js'
 import { createTestApp } from './test/test-app.js'
 import { createTestDb } from './test/test-db.js'
+import { InMemoryStorage } from './photos/storage.js'
 
 let ctx: Awaited<ReturnType<typeof createTestApp>>
 
@@ -41,7 +42,7 @@ describe('health', () => {
 
   it('reports 503 when the database is not reachable', async () => {
     const { db, pool } = createTestDb()
-    const app = buildApp({ db })
+    const app = buildApp({ db, storage: new InMemoryStorage() })
     await app.ready()
     await pool.end() // from now on, every database call fails
 

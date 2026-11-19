@@ -21,6 +21,7 @@
   "type": "module",
   "dependencies": {
     "@fastify/cookie": "^11.1.5",
+    "@fastify/multipart": "^10.1.9",
     "@fastify/rate-limit": "^11.2.2",
     "@fastify/swagger": "^9.9.3",
     "argon2": "^0.45.2",

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod/v4'
-import { requireUser } from '../auth/plugin.js'
+import { requireUser, requireLogin } from '../auth/plugin.js'
 import type { Db } from '../db/client.js'
 import { AppError } from '../errors.js'
 import { processPhoto, type ProcessFailure } from '../photos/process.js'
@@ -91,6 +91,7 @@ export function registerBeersRoutes(
     '/beers',
     {
       config: routeLimit(options.uploadRateLimit),
+      preValidation: requireLogin,
       schema: {
         summary: 'Post a beer: upload a photo and create a post',
         description:
@@ -201,6 +202,7 @@ export function registerBeersRoutes(
   api.delete(
     '/beers/:id',
     {
+      preValidation: requireLogin,
       schema: {
         summary: 'Delete one of your own posts',
         params: z.object({

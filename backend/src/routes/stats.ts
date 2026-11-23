@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { DateTime } from 'luxon'
 import { z } from 'zod/v4'
-import { requireUser } from '../auth/plugin.js'
+import { requireUser, requireLogin } from '../auth/plugin.js'
 import type { Db } from '../db/client.js'
 import { getLocalDate } from '../local-date.js'
 import { getLeaderboard, getUserCounts } from '../posts/counts.js'
@@ -53,6 +53,7 @@ export function registerStatsRoutes(
   api.get(
     '/stats/me',
     {
+      preValidation: requireLogin,
       schema: {
         summary: 'Your totals for today, this month and this year',
         response: { 200: statsResponse, 401: errorResponseSchema },
@@ -71,6 +72,7 @@ export function registerStatsRoutes(
   api.get(
     '/stats/leaderboard',
     {
+      preValidation: requireLogin,
       schema: {
         summary: 'Everyone\u2019s counts for a day, a month or a year',
         querystring: leaderboardQuery,

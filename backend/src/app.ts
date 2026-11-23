@@ -15,6 +15,9 @@ import { registerAuthRoutes } from './routes/auth.js'
 import { registerBeersRoutes } from './routes/beers.js'
 import { registerHealthRoute } from './routes/health.js'
 import { registerProtections, type AuthRateLimit } from './security/plugin.js'
+import { registerFeedRoute } from './routes/feed.js'
+import { registerPhotoRoutes } from './routes/photos.js'
+import { registerStatsRoutes } from './routes/stats.js'
 
 export interface AppOptions {
   db: Db
@@ -25,6 +28,7 @@ export interface AppOptions {
   trustProxyHops?: number | undefined
   authRateLimit?: AuthRateLimit | undefined
   uploadRateLimit?: AuthRateLimit | undefined
+  now?: (() => Date) | undefined
   photoLimits?:
     | { maxBytes?: number | undefined; maxPixels?: number | undefined }
     | undefined
@@ -40,6 +44,7 @@ export function buildApp({
   authRateLimit = { max: 10, windowSeconds: 60 },
   uploadRateLimit = { max: 20, windowSeconds: 600 },
   photoLimits = {},
+  now = () => new Date(),
 }: AppOptions) {
   const maxBytes = photoLimits.maxBytes ?? MAX_UPLOAD_BYTES
   const maxPixels = photoLimits.maxPixels ?? MAX_PIXELS
@@ -91,6 +96,9 @@ export function buildApp({
         uploadRateLimit,
         limits: { maxBytes, maxPixels },
       })
+      registerPhotoRoutes(api, { storage })
+      registerFeedRoute(api, db)
+      registerStatsRoutes(api, db, { now })
     },
     { prefix: '/api/v1' },
   )

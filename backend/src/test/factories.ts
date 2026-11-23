@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import type { Db } from '../db/client.js'
 import { invites, users } from '../db/schema.js'
+import { newPhotoKeys } from '../photos/storage.js'
+import { createPost, type NewPost } from '../posts/create-post.js'
 
 export async function addUser(
   db: Db,
@@ -34,4 +36,23 @@ export async function addInvite(
     .returning()
   if (!invite) throw new Error('insert returned no row')
   return invite
+}
+
+// A post saved the proper way (so the daily count moves too), with fresh picture keys.
+export async function addPost(
+  db: Db,
+  userId: number,
+  overrides: Partial<NewPost> = {},
+) {
+  const keys = newPhotoKeys()
+  return createPost(db, {
+    userId,
+    imageKey: keys.imageKey,
+    thumbKey: keys.thumbKey,
+    consumedAt: new Date('2026-01-15T14:42:10Z'),
+    timeSource: 'exif',
+    timeZone: 'America/New_York',
+    localDate: '2026-01-15',
+    ...overrides,
+  })
 }

@@ -13,6 +13,7 @@ import { resolvePostTime } from '../resolve-post-time.js'
 import { errorResponseSchema } from '../schemas.js'
 import { routeLimit, type RateLimit } from '../security/plugin.js'
 import { parseUploadFields, translateMultipartError } from './multipart.js'
+import { deletePost } from '../posts/delete-post.js'
 
 interface Refusal {
   status: number
@@ -195,6 +196,44 @@ export function registerBeersRoutes(
         await removePhoto(storage, keys) // do not leave files behind for a post that was not saved
         throw error
       }
+    },
+  )
+  api.delete(
+    '/beers/:id',
+    {
+      schema: {
+        summary: 'Delete one of your own posts',
+        params: z.object({
+          id: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        }),
+        response: {
+          204: z.null(),
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = requireUser(request)
+
+      const result = await deletePost(db, {
+        postId: request.params.id,
+        userId: user.id,
+      })
+      if (!result.ok) {
+        if (result.reason === 'forbidden')
+          throw new AppError(403, 'forbidden', 'That is not your post')
+        throw new AppError(404, 'not_found', 'No such post')
+      }
+
+      // The post is already gone, so a problem removing its files must not fail the request.
+      await removePhoto(storage, {
+        imageKey: result.post.imageKey,
+        thumbKey: result.post.thumbKey,
+      })
+      return reply.status(204).send(null)
     },
   )
 }

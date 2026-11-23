@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { requireUser } from '../auth/plugin.js'
+import { requireUser, requireLogin } from '../auth/plugin.js'
 import { AppError } from '../errors.js'
 import type { PhotoStorage } from '../photos/storage.js'
 
@@ -13,6 +13,7 @@ export function registerPhotoRoutes(
   app.get<{ Params: { name: string } }>(
     '/photos/:name',
     {
+      preValidation: requireLogin,
       schema: {
         summary: 'A stored photo (JPEG), for logged-in members only',
         description:

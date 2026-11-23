@@ -246,3 +246,19 @@ describe('GET /feed', () => {
     expect(res.body).not.toMatch(/passwordHash|password_hash|argon2/i)
   })
 })
+describe('login comes before input checks', () => {
+  it('turns away a logged-out person with 401 even when their input is wrong', async () => {
+    const res = await call(ctx, 'GET', '/api/v1/feed?limit=abc')
+
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.code).toBe('unauthenticated')
+  })
+
+  it('still reports bad input to someone who is logged in', async () => {
+    const { token } = await member(ctx)
+
+    const res = await call(ctx, 'GET', '/api/v1/feed?limit=abc', token)
+
+    expect(res.statusCode).toBe(400)
+  })
+})

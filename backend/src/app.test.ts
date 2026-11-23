@@ -144,6 +144,40 @@ describe('error responses', () => {
     expect(typeof body.error.code).toBe('string')
     expect(typeof body.error.message).toBe('string')
   })
+  it('says so when a body is too large', async () => {
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/test/echo',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ name: 'x'.repeat(100_000) }),
+    })
+
+    expect(res.statusCode).toBe(413)
+    expect(res.json()).toEqual({
+      error: {
+        code: 'payload_too_large',
+        message: 'The request body is too large',
+      },
+    })
+  })
+
+  it('says so when the content type is not supported, without repeating it back', async () => {
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/test/echo',
+      headers: { 'content-type': 'text/x-<script>alert(1)</script>' },
+      payload: 'hello',
+    })
+
+    expect(res.statusCode).toBe(415)
+    expect(res.json()).toEqual({
+      error: {
+        code: 'unsupported_media_type',
+        message: 'That content type is not supported',
+      },
+    })
+    expect(res.body).not.toContain('script')
+  })
 })
 
 describe('OpenAPI spec', () => {

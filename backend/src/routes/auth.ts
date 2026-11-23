@@ -12,6 +12,7 @@ import {
   requireUser,
   SESSION_COOKIE,
   setSessionCookie,
+  requireLogin,
 } from '../auth/plugin.js'
 import { createSession, deleteSession } from '../auth/sessions.js'
 import { authRouteLimit, type AuthRateLimit } from '../security/plugin.js'
@@ -51,6 +52,7 @@ export function registerAuthRoutes(
   api.get(
     '/auth/me',
     {
+      preValidation: requireLogin,
       schema: {
         summary: 'The logged-in user',
         response: { 200: userResponseSchema, 401: errorResponseSchema },

@@ -55,9 +55,8 @@ export function errorHandler(
     error.statusCode >= 400 &&
     error.statusCode < 500
   ) {
-    return reply
-      .status(error.statusCode)
-      .send(errorBody('bad_request', error.message))
+    const { code, message } = clientError(error.statusCode, error.message)
+    return reply.status(error.statusCode).send(errorBody(code, message))
   }
 
   // Anything else is our bug: log the real error, tell the client nothing about it.
@@ -69,4 +68,22 @@ export function errorHandler(
 
 export function notFoundHandler(_request: FastifyRequest, reply: FastifyReply) {
   return reply.status(404).send(errorBody('not_found', 'No such route'))
+}
+// Fixed wording for the two refusals whose original text would repeat what the client sent.
+function clientError(
+  status: number,
+  original: string,
+): { code: string; message: string } {
+  if (status === 413)
+    return {
+      code: 'payload_too_large',
+      message: 'The request body is too large',
+    }
+  if (status === 415) {
+    return {
+      code: 'unsupported_media_type',
+      message: 'That content type is not supported',
+    }
+  }
+  return { code: 'bad_request', message: original }
 }

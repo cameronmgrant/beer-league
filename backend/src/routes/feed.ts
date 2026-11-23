@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod/v4'
-import { requireUser } from '../auth/plugin.js'
+import { requireUser, requireLogin } from '../auth/plugin.js'
 import type { Db } from '../db/client.js'
 import { AppError } from '../errors.js'
 import { InvalidCursorError } from '../posts/feed-cursor.js'
@@ -18,6 +18,7 @@ export function registerFeedRoute(app: FastifyInstance, db: Db): void {
   app.withTypeProvider<ZodTypeProvider>().get(
     '/feed',
     {
+      preValidation: requireLogin,
       schema: {
         summary: 'One page of the feed, newest first',
         querystring: feedQuery,

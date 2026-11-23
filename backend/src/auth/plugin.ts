@@ -64,3 +64,8 @@ export function requireUser(request: FastifyRequest): SessionUser {
   if (!request.user) throw new AppError(401, 'unauthenticated', 'Please log in')
   return request.user
 }
+// Used as a route's preValidation hook, so a person who is not logged in is turned away
+// before the request's input is even checked.
+export async function requireLogin(request: FastifyRequest): Promise<void> {
+  requireUser(request)
+}
